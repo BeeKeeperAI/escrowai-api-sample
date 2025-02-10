@@ -9,6 +9,13 @@ import os
 import jwt
 import requests
 
+# Import encryption tool
+from bk_encryption.encryption import (
+    generate_content_encryption_key,
+    generate_wrapped_content_encryption_key,
+    encrypt_upload_dataset,
+)
+
 # EscrowAI API base URL
 BASE_URL = 'https://frontoffice.escrow.beekeeperai.com/api/v1'
 
@@ -35,6 +42,9 @@ headers = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15"
 }
 
+# Generate Content Encryption Key
+generate_content_encryption_key(filename = 'downloads/{cek}.key')
+
 # Download Key Encryption Key
 response = requests.get(f'{BASE_URL}/key-encryption-key-download/',
     headers = headers,
@@ -47,8 +57,12 @@ response = requests.get(f'{BASE_URL}/key-encryption-key-download/',
 print(response.json())
 
 # Download KEK text using response
-with open('downloads/key-encryption-key.der', 'w') as kek:
-    kek.write(response.json().get('key content'))
+if response.status_code == 200:
+    with open('downloads/{kek}.der', 'w') as kek:
+        kek.write(response.json().get('key content'))
+
+# Generate Wrapped Content Encryption Key
+generate_wrapped_content_encryption_key('downloads/{cek}.key', 'downloads/{kek}.der', filename = 'downloads/{wkey}.bkenc')
 
 # Upload Wrapped Content Encryption Key
 # Requirement: have created a WCEK using the project KEK and a generated CEK
@@ -62,7 +76,7 @@ response = requests.post(f'{BASE_URL}/wrapped-content-encryption-key/',
         'version_tag': '{version_tag}'
     },
     files = [
-        ('file_name', ('files/{wkey}.bkenc', open('files/{wkey}.bkenc', 'rb')))
+        ('file_name', ('downloads/{wkey}.bkenc', open('downloads/{wkey}.bkenc', 'rb')))
     ],
     timeout = 10
 )
@@ -87,7 +101,10 @@ response = requests.post(f'{BASE_URL}/data-attestation/',
 
 print(response.json())
 
-# Upload Dataset
+# Encrypt and upload Dataset to Azure
+encrypt_upload_dataset('files/{dataset}', 'downloads/{cek}.key', '{sas_url}')
+
+# Upload Dataset SAS URL to EscrowAI
 # Requirement: an uploaded WCEK, Data Specification, and Data Attestation
 response = requests.post(f'{BASE_URL}/dataset/',
     headers = headers,
