@@ -10,7 +10,7 @@ import jwt
 import requests
 
 # Import encryption tool
-from bk_encryption.encryption import (
+from escrowai_encrypt.encryption import (
     generate_content_encryption_key,
     generate_wrapped_content_encryption_key,
     encrypt_algorithm,
