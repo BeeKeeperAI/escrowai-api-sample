@@ -46,11 +46,8 @@ headers = {
 generate_content_encryption_key(filename = 'downloads/{cek}.key')
 
 # Download Key Encryption Key
-response = requests.get(f'{BASE_URL}/key-encryption-key-download/',
+response = requests.get(f'{BASE_URL}/key-encryption-key-download/?project_id={PROJECT_ID}',
     headers = headers,
-    data = {
-        'project_id': PROJECT_ID
-    },
     timeout = 10
 )
 
@@ -140,13 +137,8 @@ print(response.json())
 
 # Download Report
 # Requirement: a completed run, data steward access to run output
-response = requests.get(f'{BASE_URL}/report-download/',
+response = requests.get(f'{BASE_URL}/report-download/?project_id={PROJECT_ID}&algorithm_version=algorithm_version_tag&dataset_version=dataset_version_tag',
     headers = headers,
-    data = {
-        'project_id': PROJECT_ID,
-        'algorithm_version': '{algorithm_version_tag}',
-        'dataset_version': '{dataset_version_tag}'
-    },
     timeout = 10
 )
 
