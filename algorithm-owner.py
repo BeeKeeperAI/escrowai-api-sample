@@ -17,7 +17,7 @@ from escrowai_encrypt.encryption import (
 )
 
 # EscrowAI API base URL
-BASE_URL = 'https://frontoffice.escrow.beekeeperai.com/api/v1'
+BASE_URL = 'https://frontoffice.stg.escrow.beekeeperai.com/api/v1'
 
 # Set constants
 PROJECT_ID = '{project_id}' # project ID, which can be found in the Project Settings page under Metadata
@@ -27,7 +27,7 @@ EMAIL_ADDRESS = '{email_address}' # your email address used to log in to EscrowA
 auth_payload = {
     'iss': 'EscrowAI-API',
     'exp': datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=5),
-    'aud': 'frontoffice.beekeeperai',
+    'aud': 'staging.api.beekeeperai',
     'sub': PROJECT_ID,
     'user': EMAIL_ADDRESS
 }
