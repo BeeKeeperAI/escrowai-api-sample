@@ -123,13 +123,8 @@ print(response.json())
 
 # Initiate Run
 # Requirement: a run configuration with a requested run
-response = requests.get(f'{BASE_URL}/initiate-run/',
+response = requests.get(f'{BASE_URL}/initiate-run/?project_id={PROJECT_ID}&algorithm_version=algorithm_version_tag&dataset_version=dataset_version_tag',
     headers = headers,
-    data = {
-        'project_id': PROJECT_ID,
-        'algorithm_version': '{algorithm_version_tag}',
-        'dataset_version': '{dataset_version_tag}'
-    },
     timeout = 30
 )
 
@@ -137,7 +132,7 @@ print(response.json())
 
 # Download Report
 # Requirement: a completed run, data steward access to run output
-response = requests.get(f'{BASE_URL}/report-download/?project_id={PROJECT_ID}&algorithm_version=algorithm_version_tag&dataset_version=dataset_version_tag',
+response = requests.get(f'{BASE_URL}/report-download/?project_id={PROJECT_ID}&algorithm_version=algorithm_version_tag&dataset_version=dataset_version_tag&run_number=run_number',
     headers = headers,
     timeout = 10
 )
@@ -145,5 +140,6 @@ response = requests.get(f'{BASE_URL}/report-download/?project_id={PROJECT_ID}&al
 print(response.json())
 
 # Download Report text using response
-with open('downloads/report.txt', 'w') as report:
-    report.write(response.json().get('report content'))
+if response.status_code == 200:
+    with open('downloads/report.txt', 'w') as report:
+        report.write(response.json().get('report content'))
