@@ -177,13 +177,8 @@ print(response.json())
 
 # Initiate Run
 # Requirement: permission for algorithm owner to initiate runs, active run configuration
-response = requests.get(f'{BASE_URL}/initiate-run/',
+response = requests.get(f'{BASE_URL}/initiate-run/?project_id={PROJECT_ID}&algorithm_version=algorithm_version_tag&dataset_version=dataset_version_tag',
     headers = headers,
-    data = {
-        'project_id': PROJECT_ID,
-        'algorithm_version': '{algorithm_version_tag}',
-        'dataset_version': '{dataset_version_tag}'
-    },
     timeout = 30
 )
 
@@ -191,7 +186,7 @@ print(response.json())
 
 # Download Report
 # Requirement: a completed run, algorithm owner access to run output
-response = requests.get(f'{BASE_URL}/report-download/?project_id={PROJECT_ID}&algorithm_version=algorithm_version_tag&dataset_version=dataset_version_tag',
+response = requests.get(f'{BASE_URL}/report-download/?project_id={PROJECT_ID}&algorithm_version=algorithm_version_tag&dataset_version=dataset_version_tag&run_number=run_number',
     headers = headers,
     timeout = 10
 )
