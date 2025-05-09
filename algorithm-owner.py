@@ -17,7 +17,7 @@ from escrowai_encrypt.encryption import (
 )
 
 # EscrowAI API base URL
-BASE_URL = 'https://frontoffice.stg.escrow.beekeeperai.com/api/v1'
+BASE_URL = 'https://frontoffice.escrow.beekeeperai.com/api/v1'
 
 # Set constants
 PROJECT_ID = '{project_id}' # project ID, which can be found in the Project Settings page under Metadata
