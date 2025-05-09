@@ -19,7 +19,7 @@ Before you begin, ensure you have the following:
 
 1.  **Clone the Repository**:
     ```bash
-    git clone <repository_url> # Replace <repository_url> with the actual URL
+    git clone https://github.com/BeeKeeperAI/escrowai-api-sample # Replace <repository_url> with the actual URL
     cd escrowai-api-sample
     ```
 
@@ -52,7 +52,6 @@ Before you begin, ensure you have the following:
     ```bash
     pip install -r requirements.txt
     ```
-    *Note: Ensure `escrowai-encrypt` is available via pip or installed from its source if it's a custom package.*
 
 4.  **Set Environment Variable**:
     The scripts require your RSA private key to be available in an environment variable named `ESCROW_PRIVATE_KEY`.
@@ -132,8 +131,6 @@ Ensure all placeholders in the scripts have been replaced with your actual value
     ```bash
     python data-steward.py
     ```
-
-    *Note: The `BASE_URL` in both scripts points to a staging environment (`https://frontoffice.stg.escrow.beekeeperai.com/api/v1`). Change this if you are targeting a different environment.*
 
 ## API Documentation
 
