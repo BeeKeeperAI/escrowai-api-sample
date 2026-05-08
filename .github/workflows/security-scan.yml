@@ -1,0 +1,221 @@
+name: Security Scans
+
+on:
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+
+  semgrep:
+    name: Semgrep SAST Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Install Semgrep
+        run: pip install semgrep --quiet
+
+      - name: Run Semgrep
+        run: |
+          semgrep \
+            --config=auto \
+            --json \
+            --no-rewrite-rule-ids \
+            --exclude='.github' \
+            --output semgrep-results.json \
+            . || true
+
+      - name: Print Semgrep results
+        if: always()
+        run: |
+          echo "========================================"
+          echo " SEMGREP SCAN RESULTS"
+          echo "========================================"
+          if [ -f semgrep-results.json ] && [ -s semgrep-results.json ]; then
+            python3 -c "
+          import json, sys
+          with open('semgrep-results.json') as f:
+              data = json.load(f)
+          results = data.get('results', [])
+          if not results:
+              print('No findings.')
+          else:
+              for r in results:
+                  sev = r.get('extra', {}).get('severity', 'UNKNOWN').upper()
+                  path = r.get('path', '')
+                  line = r.get('start', {}).get('line', '')
+                  msg = r.get('extra', {}).get('message', '').strip().splitlines()[0]
+                  print(f'[{sev}] {path}:{line} - {msg}')
+          "
+          else
+            echo "No findings or output file not produced."
+          fi
+
+      - name: Fail on critical or high Semgrep findings
+        run: |
+          if [ ! -f semgrep-results.json ] || [ ! -s semgrep-results.json ]; then
+            echo "No semgrep results file — skipping severity check."
+            exit 0
+          fi
+          python3 -c "
+          import json, sys
+          with open('semgrep-results.json') as f:
+              data = json.load(f)
+          blocking = [r for r in data.get('results', [])
+                      if r.get('extra', {}).get('severity', '').upper() == 'ERROR']
+          if blocking:
+              print(f'BLOCKING: {len(blocking)} HIGH/CRITICAL (ERROR) finding(s) detected.')
+              for r in blocking:
+                  path = r.get('path', '')
+                  line = r.get('start', {}).get('line', '')
+                  msg = r.get('extra', {}).get('message', '').strip().splitlines()[0]
+                  rule = r.get('check_id', '')
+                  print(f'  [{rule}] {path}:{line} - {msg}')
+              sys.exit(1)
+          else:
+              print('No HIGH/CRITICAL findings. PR merge allowed.')
+          "
+
+      - name: Upload Semgrep results
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+          if-no-files-found: warn
+
+  mend-bolt:
+    name: Mend Bolt SCA Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+
+      - name: Setup Java
+        uses: actions/setup-java@v4.7.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Python virtualenv for Mend
+        run: pip install virtualenv --quiet
+
+      - name: Download Mend Unified Agent
+        run: |
+          curl -fsSL \
+            https://unified-agent.s3.amazonaws.com/wss-unified-agent.jar \
+            -o wss-unified-agent.jar
+          ls -lh wss-unified-agent.jar
+
+      - name: Write Mend config
+        run: |
+          cat > wss-scan.config << 'MEND_EOF'
+          offline=true
+          productName=REPO_NAME
+          projectName=BRANCH_NAME
+          includes=**/*.py **/*.js **/*.ts **/*.go **/*.java **/*.cs **/*.rb **/*.json **/*.toml **/*.lock **/requirements*.txt **/package*.json **/go.sum **/Gemfile.lock **/pom.xml **/build.gradle
+          excludes=**/node_modules/** **/.git/** **/dist/** **/build/** **/__pycache__/** **/vendor/**
+          checkPolicies=false
+          generateProjectDetailsJson=true
+          generateScanReport=true
+          log.level=info
+          python.installVirtualEnv=true
+          python.resolveHierarchyTree=true
+          MEND_EOF
+          sed -i "s|REPO_NAME|${{ github.repository }}|g" wss-scan.config
+          sed -i "s|BRANCH_NAME|${{ github.ref_name }}|g" wss-scan.config
+
+      - name: Run Mend Bolt scan
+        run: |
+          java -jar wss-unified-agent.jar \
+            -c wss-scan.config \
+            -d . \
+            -logLevel INFO 2>&1 | tee mend-scan.log || true
+
+      - name: Print Mend scan log
+        if: always()
+        run: |
+          echo "========================================"
+          echo " MEND BOLT SCAN LOG"
+          echo "========================================"
+          cat mend-scan.log || echo "No log file found."
+          echo ""
+          echo "--- Highlights ---"
+          grep -iE "(HIGH|CRITICAL|MEDIUM|LOW|vulnerability|license|policy|violation|ERROR|WARNING)" \
+            mend-scan.log || echo "Nothing matched the highlight filter."
+          echo ""
+          echo "--- Report files ---"
+          find whitesource/ -type f 2>/dev/null | sort || echo "No whitesource/ directory found."
+
+      - name: Fail on critical or high Mend findings
+        run: |
+          if [ ! -f mend-scan.log ]; then
+            echo "No mend-scan.log found — skipping severity check."
+            exit 0
+          fi
+
+          # Count lines explicitly mentioning critical or high severity vulnerabilities
+          CRITICAL_COUNT=$(grep -ciE "(CRITICAL|critical severity)" mend-scan.log || true)
+          HIGH_COUNT=$(grep -ciE "(HIGH|high severity)" mend-scan.log || true)
+          TOTAL=$((CRITICAL_COUNT + HIGH_COUNT))
+
+          echo "Critical findings: $CRITICAL_COUNT"
+          echo "High findings:     $HIGH_COUNT"
+
+          if [ "$TOTAL" -gt 0 ]; then
+            echo ""
+            echo "BLOCKING: $TOTAL HIGH/CRITICAL vulnerability finding(s) detected in Mend scan."
+            echo "--- Matching lines ---"
+            grep -iE "(CRITICAL|critical severity|HIGH|high severity)" mend-scan.log || true
+            exit 1
+          else
+            echo "No HIGH/CRITICAL findings. PR merge allowed."
+          fi
+
+      - name: Upload Mend logs and reports
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: mend-bolt-results
+          path: |
+            mend-scan.log
+            whitesource/
+          if-no-files-found: warn
+
+  security-summary:
+    name: Security Scan Summary
+    runs-on: ubuntu-latest
+    needs: [semgrep, mend-bolt]
+    if: always()
+
+    steps:
+      - name: Write job summary
+        run: |
+          SEMGREP_STATUS="${{ needs.semgrep.result }}"
+          MEND_STATUS="${{ needs.mend-bolt.result }}"
+
+          semgrep_icon="✅"
+          mend_icon="✅"
+          [ "$SEMGREP_STATUS" = "failure" ] && semgrep_icon="❌"
+          [ "$MEND_STATUS" = "failure" ] && mend_icon="❌"
+
+          echo "## Security Scan Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Scanner | Mode | Result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ${semgrep_icon} Semgrep SAST | local OSS CLI | $SEMGREP_STATUS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ${mend_icon} Mend Bolt SCA | local jar | $MEND_STATUS |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> **Pipeline blocks PR merge on HIGH or CRITICAL findings.**" >> "$GITHUB_STEP_SUMMARY"
+          echo "> MEDIUM/LOW findings are reported but do not block." >> "$GITHUB_STEP_SUMMARY"
+          echo "> Download full reports from Actions > Artifacts." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail summary if any scanner found critical/high issues
+        if: needs.semgrep.result == 'failure' || needs.mend-bolt.result == 'failure'
+        run: |
+          echo "One or more scanners detected HIGH/CRITICAL vulnerabilities. PR merge is blocked."
+          exit 1
